@@ -2,8 +2,13 @@ use std::collections::HashMap;
 use std::fs;
 
 mod entropy_coding;
+mod huffman_tree;
+
+pub use crate::huffman_tree::heap_test;
 
 fn main() {
+    heap_test();
+    return;
     let marker_mapping = HashMap::from([
         (0xffd8,  "Start of Image"),
         (0xffe0, "Application Default Header"),
