@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::fs;
 
+mod entropy_coding;
 
 fn main() {
     let marker_mapping = HashMap::from([
