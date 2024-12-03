@@ -65,6 +65,17 @@ fn main() {
                         println!("Huffman {}", lenchunk);
                         decode_huffman(chunk);
                     }
+                    if marker == 0xffdb {
+                        println!("QT!: {}", lenchunk);
+                        for i in 0..=lenchunk + 2 {
+print!("{}", &data[i]);
+                        }
+                        println!("");
+                        for i in 0..=lenchunk {
+print!("{:x}", &data[i]);
+                        }
+                        println!("");
+                    }
 
                     if data.len() >= 2 + lenchunk {
                         data = &data[2 + lenchunk..];

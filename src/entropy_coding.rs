@@ -31,6 +31,39 @@ pub fn encode(input: &[[i32; 8]; 8]) -> Vec<i32> {
     zigzag
 }
 
+pub fn run_length_encoded(input: Vec<i32>) -> Vec<(i32, i32)> {
+    let mut zero_count = 0;
+    let mut v: Vec<(i32, i32)> = vec![];
+
+    for i in input {
+        if i == 0 {
+            zero_count += 1;
+        } else {
+            v.push((zero_count, i));
+            zero_count = 0;
+        }
+    }
+
+    if zero_count > 0 {
+        v.push((0, 0));
+    }
+        
+    v
+}
+
+pub fn run_length_decoded(coded: Vec<(i32, i32)>) -> Vec<i32> {
+    let required_length = 8 * 8;
+    let mut v: Vec<i32> = vec![0; required_length];
+
+    let mut index: usize = 0;
+    for (i, value) in coded.iter().enumerate() {
+        index += value.0 as usize;
+        v[index + i] = value.1;
+    }
+
+    v
+}
+
 
 #[cfg(test)]
 mod tests {
@@ -89,5 +122,25 @@ mod tests {
         ];
 
         assert_eq!(decode(&quantized_block), expected_output);
+    }
+
+    #[test]
+    fn run_length_encoding() {
+        let input = vec![
+            16, 11, 12, 12, 0, 10, 14, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+        let expected_output = [(0, 16), (0, 11), (0, 12), (0, 12), (1, 10), (0, 14), (0, 0)];
+        assert_eq!(run_length_encoded(input), expected_output);
+    }
+
+    #[test]
+    fn run_length_decoding() {
+        let input = [(0, 16), (0, 11), (0, 12), (0, 12), (1, 10), (0, 14), (0, 0)].to_vec();
+        let expected_output = vec![
+            16, 11, 12, 12, 0, 10, 14, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+        assert_eq!(run_length_decoded(input), expected_output);
     }
 }
