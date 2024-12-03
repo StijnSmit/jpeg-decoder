@@ -4,11 +4,18 @@ use std::fs;
 mod entropy_coding;
 mod huffman_tree;
 
-pub use crate::huffman_tree::heap_test;
-
 fn main() {
-    heap_test();
-    return;
+    let input: HashMap<char, i32> =
+        HashMap::from([('A', 4), ('B', 3), ('C', 2), ('D', 1)]);
+    let tree = huffman_tree::huffman_tree(input);
+    let mapped = huffman_tree::huffman_tree_mapped(&tree);
+
+    let coded_text = "0111010110001111".to_string();
+    let decoded = huffman_tree::decode(&tree, coded_text);
+
+    println!("Mapped: {:?}", mapped);
+    println!("{}", decoded);
+
     let marker_mapping = HashMap::from([
         (0xffd8,  "Start of Image"),
         (0xffe0, "Application Default Header"),
