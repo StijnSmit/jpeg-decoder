@@ -4,18 +4,32 @@ use std::fs;
 mod entropy_coding;
 mod huffman_tree;
 
+#[repr(u16)]
+enum Headers {
+    StartOfImage = 0xffd8,
+    Application = 0xffe0,
+    QuantizationTable = 0xffdb,
+    StartOfFrame = 0xffc0,
+    HuffmanTable = 0xffc4,
+    StartOfScan = 0xffda, 
+    EndOfImage = 0xffd9,
+}
+
+struct jpeg {
+    qtables: Vec<QuantizationTable>,
+    sof: ImageData,
+    htables: Vec<HuffmanHeader>,
+    raw_data: Vec<u8>,
+}
+
+impl jpeg {
+    fn new() -> Self {
+        unimplemented!()
+    }
+}
+
+
 fn main() {
-    let input: HashMap<char, i32> =
-        HashMap::from([('A', 4), ('B', 3), ('C', 2), ('D', 1)]);
-    let tree = huffman_tree::huffman_tree(input);
-    let mapped = huffman_tree::huffman_tree_mapped(&tree);
-
-    let coded_text = "0111010110001111".to_string();
-    let decoded = huffman_tree::decode(&tree, coded_text);
-
-    println!("Mapped: {:?}", mapped);
-    println!("{}", decoded);
-
     let marker_mapping = HashMap::from([
         (0xffd8,  "Start of Image"),
         (0xffe0, "Application Default Header"),
@@ -59,22 +73,20 @@ fn main() {
             _ => {
                 if data.len() >= 4 {
                     let lenchunk = u16::from_be_bytes([data[2], data[3]]) as usize;
-                    let chunk = &data[4..=lenchunk + 2];
+                    let _chunk = &data[4..=lenchunk + 2];
 
                     if marker == 0xffc4 {
-                        println!("Huffman {}", lenchunk);
-                        decode_huffman(chunk);
-                    }
-                    if marker == 0xffdb {
-                        println!("QT!: {}", lenchunk);
-                        for i in 0..=lenchunk + 2 {
-print!("{}", &data[i]);
-                        }
-                        println!("");
-                        for i in 0..=lenchunk {
-print!("{:x}", &data[i]);
-                        }
-                        println!("");
+                        let chunk = &data[2..];
+                        let table = decode_huffman_2(chunk);
+                        println!("{:?}", table);
+                    } else if marker == 0xffdb {
+                        let chunk = &data[2..lenchunk + 2];
+                        let table = QuantizationTable::new(chunk);
+                       println!("QT: {:?}", table);
+                    } else if marker == 0xffc0 {
+                        let chunk = &data[2..lenchunk + 2];
+                        let detail = decode_frame(chunk);
+                        println!("Frame Detail: {:?}", detail);
                     }
 
                     if data.len() >= 2 + lenchunk {
@@ -93,21 +105,89 @@ print!("{:x}", &data[i]);
     }
 }
 
-fn decode_huffman(data: &[u8]) {
-    let header = data[0];
-    let lengths  = &data[1..17];
+#[derive(Debug)]
+struct ImageData {
+    data_precision: u8,
+    height: u16,
+    width: u16,
+    noc: u8,
+    components: Vec<(u8, u8, u8, u8)>,
+}
+
+fn decode_frame(input: &[u8]) -> ImageData {
+    let mut components: Vec<(u8, u8, u8, u8)> = Vec::new();
+    let mut index = 7;
+    let noc = input[index] as u8;
+    index += 1;
+    for _ in 0..noc {
+        let id = input[index];
+        let sampling_factors = input[index + 1];
+        let h = sampling_factors >> 4;
+        let v = sampling_factors & 0x0f;
+        let table_id = input[index + 2];
+        components.push((id, h, v, table_id));
+        index += 3;
+    }
+
+    ImageData {
+        data_precision: input[2],
+        height: u16::from_be_bytes([input[3], input[4]]),
+        width: u16::from_be_bytes([input[5], input[6]]),
+        noc,
+        components,
+    }
+}
+
+#[derive(Debug)]
+struct QuantizationTable {
+    class_destination: u8,
+    bytes: Vec<u8>,
+}
+
+impl QuantizationTable {
+    fn new(input: &[u8]) -> Self {
+        QuantizationTable {
+            class_destination: input[2],
+            bytes: input[3..].to_vec()
+        }
+    }
+}
+
+#[derive(Debug)]
+struct HuffmanHeader {
+    length: u16,
+    class_destination: u8,
+    chunk: Vec<u8>,
+    lengths: Vec<u8>,
+    total_symbols: usize,
+    symbols: Vec<u8>,
+    elements_lengths: Vec<u8>,
+}
+
+fn decode_huffman_2(data: &[u8]) -> HuffmanHeader {
+    let len_chunk = u16::from_be_bytes([data[0], data[1]]) as usize;
+    let class_destination = data[2];
+    let chunk = &data[..len_chunk];
+    let mut data = &data[3..];
+
+    let lengths = &data[..16];
+    data = &data[16..];
+    
     let total_symbols: usize = lengths.iter().map(|&x| x as usize).sum();
-    let symbols = &data[17..17 + total_symbols];
+    let symbols = &data[..total_symbols];
 
     let mut elements_lengths = Vec::new();
     for (length, &count) in lengths.iter().enumerate() {
         elements_lengths.extend(std::iter::repeat((length + 1) as u8).take(count as usize));
     }
 
-
-    println!("Header: {header}");
-    println!("Lengths: {lengths:?}");
-    println!("Total symbols: {total_symbols}");
-    println!("symbols: {symbols:?}");
-    println!("Elements lengths: {}", elements_lengths.len());
+    HuffmanHeader {
+        length: len_chunk as u16,
+        class_destination,
+        chunk: chunk.to_vec(),
+        lengths: lengths.to_vec(),
+        total_symbols,
+        symbols: symbols.to_vec(),
+        elements_lengths,
+    }
 }
