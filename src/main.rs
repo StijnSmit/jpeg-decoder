@@ -1,12 +1,10 @@
-use std::fs;
 
 //mod entropy_coding;
 //mod huffman_tree;
-mod jpeg;
+use jpeg_decoder::create_jpeg;
 
 fn main() {
-    let img_data: Vec<u8> = fs::read("tutorial-image.jpg").unwrap();
-    let jpeg = jpeg::JPEG::new(img_data);
+    let jpeg = create_jpeg();
     println!("{:?}", jpeg);
 }
 
