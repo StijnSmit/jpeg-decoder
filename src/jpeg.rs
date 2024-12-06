@@ -1,4 +1,4 @@
-use std::fmt;
+use std::{fmt, collections::VecDeque};
 
 #[derive(PartialEq, Debug)]
 enum Markers {
@@ -44,8 +44,8 @@ pub struct JPEG {
     qtables: Vec<QuantizationTable>,
     sof: ImageData,
     sos: SOS,
-    htables: Vec<HuffmanHeader>,
-    raw_data: Vec<u8>,
+    pub htables: Vec<DHT>,
+    pub raw_data: Vec<u8>,
 }
 
 impl fmt::Debug for JPEG {
@@ -55,6 +55,7 @@ impl fmt::Debug for JPEG {
             .field("Scan", &self.sos)
             .field("Quantized tables", &self.qtables.len())
             .field("Huffman tables", &self.htables.len())
+            .field("\ncontents", &self.htables)
             .field("Raw data of len", &self.raw_data.len())
             .finish()
     } 
@@ -66,7 +67,7 @@ impl JPEG {
         let mut qtables: Vec<QuantizationTable> = vec![];
         let mut sof: ImageData = ImageData::empty();
         let mut sos: SOS = SOS::empty();
-        let mut htables: Vec<HuffmanHeader> = vec![];
+        let mut htables: Vec<DHT> = vec![];
         let mut raw_data: Vec<u8> = vec![];
 
         loop {
@@ -104,7 +105,7 @@ impl JPEG {
                     continue;
                 }
                 Markers::DefineHuffmanTable => {
-                    let second_table = HuffmanHeader::new(_chunk);
+                    let second_table = DHT::new(_chunk);
                     htables.push(second_table);
                 }
                 Markers::QuantizationTable => {
@@ -126,6 +127,17 @@ impl JPEG {
         }
 
         JPEG { qtables , sof, sos, htables, raw_data }
+    }
+
+    pub fn bitstream(&self) -> VecDeque<u8> {
+        let mut bitstream = VecDeque::new();
+        for byte in &self.raw_data {
+            for bit_pos in (0..8).rev() {
+                let bit = (byte >> bit_pos) & 1;
+                bitstream.push_back(bit);
+            }
+        }
+        bitstream
     }
 }
 
@@ -183,31 +195,31 @@ impl QuantizationTable {
 }
 
 #[derive(Debug)]
-struct HuffmanHeader {
-    class: u8,
-    destination: u8,
-    lengths: Vec<u8>,
+pub struct DHT {
+    pub p: u8,
+    pub t: u8,
+    pub code_lengths: Vec<u8>,
     total_symbols: usize,
-    symbols: Vec<u8>,
-    elements_lengths: Vec<u8>,
+    pub symbols: Vec<u8>,
+    pub elements_lengths: Vec<u8>,
 }
 
-impl HuffmanHeader {
+impl DHT {
     fn new(input: &[u8]) -> Self {
         
         let cd = input[0];
-        let class = cd >> 4;
-        let destination = cd & 0x0f;
-        let lengths = &input[1..17];
-        let total_symbols: usize = lengths.iter().map(|&x| x as usize).sum();
+        let p = cd >> 4;
+        let t = cd & 0x0f;
+        let code_lengths = &input[1..17];
+        let total_symbols: usize = code_lengths.iter().map(|&x| x as usize).sum();
         let symbols = &input[17..17 + total_symbols];
 
         let mut elements_lengths = Vec::new();
-        for (length, &count) in lengths.iter().enumerate() {
+        for (length, &count) in code_lengths.iter().enumerate() {
             elements_lengths.extend(std::iter::repeat((length + 1) as u8).take(count as usize));
         }
 
-        HuffmanHeader { class, destination, lengths: lengths.to_vec(), total_symbols, symbols: symbols.to_vec(), elements_lengths }
+        DHT { p, t, code_lengths: code_lengths.to_vec(), total_symbols, symbols: symbols.to_vec(), elements_lengths }
     }
 }
 
